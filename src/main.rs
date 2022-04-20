@@ -3,8 +3,12 @@
 
 extern crate rustc_const_eval;
 extern crate rustc_driver;
+extern crate rustc_hir;
 extern crate rustc_interface;
+extern crate rustc_lint;
 extern crate rustc_middle;
+extern crate rustc_span;
+extern crate rustc_lint_defs;
 
 pub static ENV_VAR_WHYNOT_MODE: &str = "__CARGO-WHYNOT_MODE";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";

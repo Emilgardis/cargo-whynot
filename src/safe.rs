@@ -1,6 +1,8 @@
 use std::ffi::OsString;
 
 use eyre::{Context, Result};
+use rustc_lint::{LateLintPass, LintContext, LintPass};
+use rustc_lint_defs::declare_lint;
 
 use crate::run::cargo_check;
 
@@ -25,11 +27,51 @@ pub(crate) fn run_rustc(rem: &[OsString]) -> Result<()> {
     Ok(())
 }
 
+pub struct UnsafeFindVisitor;
+
+impl LintPass for UnsafeFindVisitor {
+    fn name(&self) -> &'static str {
+        "unsafe_find_visitor"
+    }
+}
+
+impl<'tcx> LateLintPass<'tcx> for UnsafeFindVisitor {
+    fn check_fn_post(
+        &mut self,
+        cx: &rustc_lint::LateContext<'tcx>,
+        _: rustc_hir::intravisit::FnKind<'tcx>,
+        _: &'tcx rustc_hir::FnDecl<'tcx>,
+        _: &'tcx rustc_hir::Body<'tcx>,
+        s: rustc_span::Span,
+        _: rustc_hir::HirId,
+    ) {
+        cx.struct_span_lint(UNSAFE_FIND_VISITOR, s, |builder| {
+            // use UnsafetyChecker for this.
+            builder.build("hello my old friend").emit()
+        })
+    }
+}
+
+declare_lint! {
+    /// Custom lint :)
+    /// stuff
+    UNSAFE_FIND_VISITOR,
+    Deny,
+    "does stuff"
+}
+
 pub struct MyCallback {}
 
 impl rustc_driver::Callbacks for MyCallback {
-    fn config(&mut self, _config: &mut rustc_interface::interface::Config) {
-        // fixme: this is where it all happens (well, not really but still)
+    fn config(&mut self, config: &mut rustc_interface::interface::Config) {
+        let previous = config.register_lints.take();
+        config.register_lints = Some(Box::new(move |sess, lint_store| {
+            if let Some(previous) = &previous {
+                previous(sess, lint_store);
+            }
+
+            lint_store.register_late_pass(|| Box::new(UnsafeFindVisitor))
+        }))
     }
 
     fn after_parsing<'tcx>(
