@@ -1,14 +1,18 @@
 #![feature(rustc_private)]
-#![feature(let_else)]
+#![feature(let_else, box_patterns)]
 
+extern crate rustc_codegen_ssa;
 extern crate rustc_const_eval;
 extern crate rustc_driver;
+extern crate rustc_errors;
+extern crate rustc_hash;
 extern crate rustc_hir;
 extern crate rustc_interface;
-extern crate rustc_lint;
+extern crate rustc_metadata;
 extern crate rustc_middle;
+extern crate rustc_session;
 extern crate rustc_span;
-extern crate rustc_lint_defs;
+extern crate rustc_data_structures;
 
 pub static ENV_VAR_WHYNOT_MODE: &str = "__CARGO-WHYNOT_MODE";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
@@ -43,6 +47,8 @@ fn main() -> eyre::Result<()> {
 
 pub fn parse_selector(s: &str) -> Result<Selector, <Selector as FromStr>::Err> {
     if let Some(stripped) = s.strip_prefix("::") {
+        stripped.parse()
+    } else if let Some(stripped) = s.strip_prefix("crate::") {
         stripped.parse()
     } else {
         s.parse()

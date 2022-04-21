@@ -1,8 +1,16 @@
-use std::ffi::OsString;
+use std::{collections::VecDeque, ffi::OsString, sync::Arc};
 
 use eyre::{Context, Result};
-use rustc_lint::{LateLintPass, LintContext, LintPass};
-use rustc_lint_defs::declare_lint;
+use hir::{def_id::LocalDefId, ItemId};
+use rustc_codegen_ssa::{traits::CodegenBackend, CodegenResults};
+use rustc_driver::Callbacks;
+use rustc_hash::FxHashMap;
+use rustc_hir as hir;
+use rustc_middle::{
+    dep_graph::{WorkProduct, WorkProductId},
+    mir::{self, UnsafetyViolation, UnsafetyViolationDetails, UnsafetyViolationKind},
+    ty::{self, query::ExternProviders},
+};
 
 use crate::run::cargo_check;
 
@@ -16,85 +24,169 @@ pub(crate) fn run_rustc(rem: &[OsString]) -> Result<()> {
         std::env::var(crate::ENV_VAR_WHYNOT_MODE).as_deref(),
         Ok("safe")
     );
-    let selector = crate::parse_selector(
-        &std::env::var(crate::ENV_VAR_WHYNOT_SELECTOR)
-            .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)?,
-    )?;
+    let selector = std::env::var(crate::ENV_VAR_WHYNOT_SELECTOR)
+        .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)?;
+
+    let _ = crate::parse_selector(&selector)?;
     tracing::debug!("in whynot safe rustc with selector: {selector:?}");
     tracing::debug!("in whynot safe rustc with rem: `{rem:?}`");
 
-    crate::run::rustc_run(&mut MyCallback {}, &rem[1..])?;
+    crate::run::rustc_run(
+        None,
+        Some(Box::new(move |_| Box::new(FakeCodeGen { selector }))),
+        &rem[1..],
+    )?;
+
     Ok(())
 }
 
-pub struct UnsafeFindVisitor;
+pub struct FakeCodeGen {
+    selector: String,
+}
 
-impl LintPass for UnsafeFindVisitor {
-    fn name(&self) -> &'static str {
-        "unsafe_find_visitor"
+impl FakeCodeGen {
+    pub fn selector(&self) -> syn_select::Selector {
+        crate::parse_selector(&self.selector).expect("this should not fail")
     }
-}
 
-impl<'tcx> LateLintPass<'tcx> for UnsafeFindVisitor {
-    fn check_fn_post(
-        &mut self,
-        cx: &rustc_lint::LateContext<'tcx>,
-        _: rustc_hir::intravisit::FnKind<'tcx>,
-        _: &'tcx rustc_hir::FnDecl<'tcx>,
-        _: &'tcx rustc_hir::Body<'tcx>,
-        s: rustc_span::Span,
-        _: rustc_hir::HirId,
-    ) {
-        cx.struct_span_lint(UNSAFE_FIND_VISITOR, s, |builder| {
-            // use UnsafetyChecker for this.
-            builder.build("hello my old friend").emit()
-        })
+    pub fn run<'tcx>(&self, tcx: ty::TyCtxt<'tcx>) -> Result<()> {
+        let fun_id = self.search(tcx)?;
+        let reason = self.find_unsafe_things(tcx, fun_id)?;
+        tracing::info!("reason = {:?}", reason);
+        Ok(())
     }
-}
 
-declare_lint! {
-    /// Custom lint :)
-    /// stuff
-    UNSAFE_FIND_VISITOR,
-    Deny,
-    "does stuff"
-}
-
-pub struct MyCallback {}
-
-impl rustc_driver::Callbacks for MyCallback {
-    fn config(&mut self, config: &mut rustc_interface::interface::Config) {
-        let previous = config.register_lints.take();
-        config.register_lints = Some(Box::new(move |sess, lint_store| {
-            if let Some(previous) = &previous {
-                previous(sess, lint_store);
+    pub fn find_unsafe_things<'tcx>(
+        &self,
+        tcx: ty::TyCtxt<'tcx>,
+        fun_id: ItemId,
+    ) -> Result<Vec<UnsafetyViolation>> {
+        let mut reasons = vec![];
+        let mut possible_reasons = vec![].into();
+        let mut did = fun_id.def_id;
+        let mut loopctr = 10;
+        loop {
+            loopctr -= 1;
+            if loopctr == 0 {
+                break;
             }
-
-            lint_store.register_late_pass(|| Box::new(UnsafeFindVisitor))
-        }))
+            self.find_unsafe_things_(tcx, did, &mut reasons, &mut possible_reasons, &mut 100)?;
+            if reasons.is_empty() {
+                // take the first possible unsafe fn, if it is local, check why it is unsafe.
+                'possible: while let Some(violation) = possible_reasons.pop_front() {
+                    match violation.kind {
+                        UnsafetyViolationKind::UnsafeFn => {
+                            todo!(
+                                "find the functions definition, and then check why it is unsafe."
+                            );
+                            self.find_unsafe_things_(
+                                tcx,
+                                did,
+                                &mut reasons,
+                                &mut possible_reasons,
+                                &mut 100,
+                            )?;
+                            break 'possible;
+                        }
+                        _ => continue 'possible,
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        Ok(reasons)
     }
 
-    fn after_parsing<'tcx>(
-        &mut self,
-        _compiler: &rustc_interface::interface::Compiler,
-        _queries: &'tcx rustc_interface::Queries<'tcx>,
-    ) -> rustc_driver::Compilation {
-        rustc_driver::Compilation::Continue
+    fn find_unsafe_things_<'tcx>(
+        &self,
+        tcx: ty::TyCtxt<'tcx>,
+        def_id: LocalDefId,
+        reasons: &mut Vec<UnsafetyViolation>,
+        possible_reasons: &mut VecDeque<UnsafetyViolation>,
+        depth: &mut i32,
+    ) -> Result<(), color_eyre::Report> {
+        *depth -= 1;
+        if *depth == 0 {
+            panic!()
+        }
+        let res: &'_ mir::UnsafetyCheckResult = tcx.unsafety_check_result(def_id);
+        dbg!(res);
+        for violation in &res.violations {
+            match (violation.kind, violation.details) {
+                (
+                    UnsafetyViolationKind::UnsafeFn,
+                    UnsafetyViolationDetails::CallToUnsafeFunction,
+                ) => {
+                    possible_reasons.push_back(violation.clone());
+                }
+                _ => reasons.push(violation.clone()),
+            }
+        }
+        Ok(())
     }
 
-    fn after_expansion<'tcx>(
-        &mut self,
-        _compiler: &rustc_interface::interface::Compiler,
-        _queries: &'tcx rustc_interface::Queries<'tcx>,
-    ) -> rustc_driver::Compilation {
-        rustc_driver::Compilation::Continue
+    /// Search for the selectors itemid
+    pub fn search<'tcx>(&self, tcx: ty::TyCtxt<'tcx>) -> Result<ItemId> {
+        // Find def_id of function in selector.
+        let hir = tcx.hir();
+        hir.items()
+            .find(|item| {
+                if tcx.def_kind(item.def_id.to_def_id()) != hir::def::DefKind::Fn {
+                    return false;
+                }
+                let path = tcx.def_path(item.def_id.to_def_id());
+                tracing::debug!(no_crate = ?path.to_string_no_crate_verbose());
+                tracing::debug!(debug = ?path);
+
+                if path.to_string_no_crate_verbose().ends_with(&self.selector) {
+                    return true;
+                }
+                false
+            })
+            .ok_or(eyre::eyre!("no such function found"))
+    }
+}
+
+impl CodegenBackend for FakeCodeGen {
+    fn codegen_crate<'tcx>(
+        &self,
+        tcx: ty::TyCtxt<'tcx>,
+        metadata: rustc_metadata::EncodedMetadata,
+        need_metadata_module: bool,
+    ) -> Box<dyn std::any::Any> {
+        tracing::info!("codegen_crate");
+        match self.run(tcx) {
+            Err(e) => tracing::error!("{}", e),
+            Ok(_) => (),
+        };
+        Box::new(())
     }
 
-    fn after_analysis<'tcx>(
-        &mut self,
-        _compiler: &rustc_interface::interface::Compiler,
-        _queries: &'tcx rustc_interface::Queries<'tcx>,
-    ) -> rustc_driver::Compilation {
-        rustc_driver::Compilation::Stop
+    fn join_codegen(
+        &self,
+        _: Box<dyn std::any::Any>,
+        _: &rustc_session::Session,
+        _: &rustc_session::config::OutputFilenames,
+    ) -> Result<
+        (
+            rustc_codegen_ssa::CodegenResults,
+            rustc_hash::FxHashMap<
+                rustc_middle::dep_graph::WorkProductId,
+                rustc_middle::dep_graph::WorkProduct,
+            >,
+        ),
+        rustc_errors::ErrorGuaranteed,
+    > {
+        std::process::exit(0);
+    }
+
+    fn link(
+        &self,
+        _: &rustc_session::Session,
+        _: rustc_codegen_ssa::CodegenResults,
+        _: &rustc_session::config::OutputFilenames,
+    ) -> Result<(), rustc_errors::ErrorGuaranteed> {
+        unimplemented!()
     }
 }

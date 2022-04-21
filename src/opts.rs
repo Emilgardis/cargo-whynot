@@ -89,7 +89,7 @@ fn extract(item: (ContextKind, &ContextValue)) -> Option<&ContextValue> {
 pub fn parse_known_args() -> Result<(Opts, Vec<String>), eyre::Report> {
     let mut rem: Vec<String> = vec![];
     let mut args: Vec<String> = std::env::args().collect();
-    let mut loop_ctr = 2;
+    let mut loop_ctr = 100;
     loop {
         loop_ctr -= 1;
         if loop_ctr == 0 {

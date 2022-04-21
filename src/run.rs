@@ -1,4 +1,6 @@
 use eyre::Result;
+use rustc_codegen_ssa::traits::CodegenBackend;
+use rustc_session::config;
 use std::{ffi::OsStr, path::PathBuf};
 
 /// Invoke cargo check, but, set RUSTC_WORKSPACE_WRAPPER to this binary
@@ -25,8 +27,9 @@ pub fn cargo_check<T: AsRef<OsStr>>(
 }
 
 // runs rustc
-pub fn rustc_run<C: rustc_driver::Callbacks + Send, T: AsRef<OsStr>>(
-    callbacks: &mut C,
+pub fn rustc_run<T: AsRef<OsStr>>(
+    callbacks: Option<&mut (dyn rustc_driver::Callbacks + Send)>,
+    set_codegen: Option<Box<dyn FnOnce(&config::Options) -> Box<dyn CodegenBackend> + Send>>,
     args: &[T],
 ) -> Result<()> {
     let mut rustc_args = vec![String::from("rustc")];
@@ -41,9 +44,15 @@ pub fn rustc_run<C: rustc_driver::Callbacks + Send, T: AsRef<OsStr>>(
             .map(|s| s.as_ref().to_string_lossy().to_string()),
     );
 
-    rustc_driver::RunCompiler::new(&rustc_args, callbacks)
-        .run()
-        .map_err(|_| std::process::exit(1))
+    let cb = if let Some(callbacks) = callbacks {
+        callbacks
+    } else {
+        Box::leak(Box::new(rustc_driver::TimePassesCallbacks::default()))
+    };
+
+    let mut run = rustc_driver::RunCompiler::new(&rustc_args, cb);
+    run.set_make_codegen_backend(set_codegen);
+    run.run().map_err(|_| std::process::exit(1))
 }
 
 fn sysroot() -> Result<PathBuf> {
