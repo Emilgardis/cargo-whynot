@@ -12,6 +12,9 @@ use rustc_middle::{
     ty::{self, query::ExternProviders},
 };
 
+pub mod checker;
+pub mod types;
+
 use crate::run::cargo_check;
 
 pub(crate) fn run(args: crate::opts::Args, rem: &[String]) -> Result<()> {

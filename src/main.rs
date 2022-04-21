@@ -13,6 +13,9 @@ extern crate rustc_middle;
 extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_data_structures;
+extern crate rustc_macros;
+extern crate rustc_query_system;
+extern crate rustc_serialize;
 
 pub static ENV_VAR_WHYNOT_MODE: &str = "__CARGO-WHYNOT_MODE";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
