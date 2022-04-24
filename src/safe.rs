@@ -1,22 +1,25 @@
-use std::{collections::VecDeque, ffi::OsString, sync::Arc};
+use std::{collections::VecDeque, ffi::OsString};
 
 use eyre::{Context, Result};
 use hir::{def_id::LocalDefId, ItemId};
-use rustc_codegen_ssa::{traits::CodegenBackend, CodegenResults};
-use rustc_driver::Callbacks;
-use rustc_hash::FxHashMap;
+use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_hir as hir;
 use rustc_middle::{
-    dep_graph::{WorkProduct, WorkProductId},
     mir::{self, UnsafetyViolation, UnsafetyViolationDetails, UnsafetyViolationKind},
-    ty::{self, query::ExternProviders},
+    ty::{self},
 };
 
 use crate::run::cargo_check;
 
 pub(crate) fn run(args: crate::opts::Args, rem: &[String]) -> Result<()> {
     tracing::debug!("checking");
-    cargo_check("safe", Some(args.item.to_string()), rem)
+    cargo_check(
+        "safe",
+        Some(args.item.to_string()),
+        &args.package,
+        None,
+        rem,
+    )
 }
 
 pub(crate) fn run_rustc(rem: &[OsString]) -> Result<()> {
@@ -74,18 +77,12 @@ impl FakeCodeGen {
             if reasons.is_empty() {
                 // take the first possible unsafe fn, if it is local, check why it is unsafe.
                 'possible: while let Some(violation) = possible_reasons.pop_front() {
-                    match violation.kind {
-                        UnsafetyViolationKind::UnsafeFn => {
-                            todo!(
-                                "find the functions definition, and then check why it is unsafe."
-                            );
-                            self.find_unsafe_things_(
-                                tcx,
-                                did,
-                                &mut reasons,
-                                &mut possible_reasons,
-                                &mut 100,
-                            )?;
+                    match (violation.details, violation.kind) {
+                        (
+                            UnsafetyViolationDetails::CallToUnsafeFunction(Some(new_did)),
+                            UnsafetyViolationKind::UnsafeFn,
+                        ) => {
+                            did = new_did.expect_local();
                             break 'possible;
                         }
                         _ => continue 'possible,
@@ -116,8 +113,9 @@ impl FakeCodeGen {
             match (violation.kind, violation.details) {
                 (
                     UnsafetyViolationKind::UnsafeFn,
-                    UnsafetyViolationDetails::CallToUnsafeFunction,
+                    UnsafetyViolationDetails::CallToUnsafeFunction(did),
                 ) => {
+                    tracing::debug!("unsafe fn {:?} is a possible reason for unsafety", did);
                     possible_reasons.push_back(violation.clone());
                 }
                 _ => reasons.push(violation.clone()),
@@ -152,8 +150,8 @@ impl CodegenBackend for FakeCodeGen {
     fn codegen_crate<'tcx>(
         &self,
         tcx: ty::TyCtxt<'tcx>,
-        metadata: rustc_metadata::EncodedMetadata,
-        need_metadata_module: bool,
+        _: rustc_metadata::EncodedMetadata,
+        _: bool,
     ) -> Box<dyn std::any::Any> {
         tracing::info!("codegen_crate");
         match self.run(tcx) {

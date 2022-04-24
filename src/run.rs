@@ -7,6 +7,8 @@ use std::{ffi::OsStr, path::PathBuf};
 pub fn cargo_check<T: AsRef<OsStr>>(
     command_mode: &'static str,
     command_selector: Option<String>,
+    package: &Option<String>,
+    rustflags: Option<&'static str>,
     args: &[T],
 ) -> Result<()> {
     // FIXME: Is this the same cargo?
@@ -15,8 +17,15 @@ pub fn cargo_check<T: AsRef<OsStr>>(
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("check");
     cmd.args(args);
+    if let Some(package) = package {
+        cmd.args(["-p", &package]);
+    }
+
     cmd.env("RUSTC_WORKSPACE_WRAPPER", std::env::current_exe()?);
     cmd.env(crate::ENV_VAR_WHYNOT_MODE, command_mode);
+    if let Some(flags) = rustflags {
+        cmd.env("RUSTFLAGS", flags);
+    }
     if let Some(selector) = command_selector {
         cmd.env(crate::ENV_VAR_WHYNOT_SELECTOR, selector);
     }

@@ -1,3 +1,4 @@
 {
-  "rust-analyzer.rustcSource": "discover"
+  "rust-analyzer.rustcSource": "discover",
+  "rust-analyzer.rustfmt.overrideCommand": ["rustfmt", "+nightly"]
 }

@@ -37,6 +37,8 @@ pub struct Args {
     /// Local path to workspace function to check.
     #[clap(value_name = "ITEM", parse(try_from_str = crate::parse_selector))]
     pub item: Selector,
+    #[clap(long, short = 'p')]
+    pub package: Option<String>
 }
 
 #[derive(Debug, Clone, Copy)]
