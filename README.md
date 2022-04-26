@@ -4,7 +4,6 @@ WIP
 
 Cargo subcommand to find out why a function is unsafe.
 
-
 ## What is unsafety?
 
 https://doc.rust-lang.org/nomicon/what-unsafe-does.html
@@ -17,7 +16,7 @@ https://doc.rust-lang.org/nomicon/what-unsafe-does.html
     Access fields of unions
 
 
-## Examples WIP
+## Examples
 
 With the following code
 
@@ -29,10 +28,9 @@ pub unsafe fn foo() {
     eprintln!("a: {}", a);
 }
 
-
 pub mod unsafe_mod {
     pub unsafe fn unsafety() -> u32 {
-        let mut a = 1; 
+        let mut a = 1;
         let a = std::ptr::addr_of_mut!(a);
         // this is the unsafe part
         let b = *a;
@@ -43,8 +41,23 @@ pub mod unsafe_mod {
 
 `cargo whynot safe foo`
 
-would report something like
+will report
 
 ```
-`foo` is marked unsafe due to calling `unsafe_mod::unsafety` which dereferences a raw pointer.
+note: Function is unsafe
+  ┌─ src\lib.rs:3:1
+  │
+3 │ pub unsafe fn foo() {
+  │ ^^^^^^^^^^^^^^^^^^^ function is unsafe because:
+4 │     let a = unsafety();
+  │             ---------- call to unsafe function `unsafe_mod::unsafety`
+
+help: 
+   ┌─ src\lib.rs:10:5
+   │
+10 │     pub unsafe fn unsafety() -> u32 {
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function is unsafe because:
+   ·
+14 │         let b = *a;
+   │                 ^^ dereference of raw pointer
 ```

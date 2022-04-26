@@ -3,8 +3,10 @@ pub mod unsafety_visitor;
 
 use std::{collections::VecDeque, ffi::OsString};
 
+use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
 use eyre::{Context, Result};
 use hir::{def_id::LocalDefId, itemlikevisit::ItemLikeVisitor, FnHeader};
+use itertools::Itertools;
 use rustc_hir as hir;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Span;
@@ -12,6 +14,7 @@ use rustc_span::Span;
 use crate::{run::cargo_check, safe::unsafety_visitor::UnsafeOpKind};
 
 pub(crate) fn run(args: crate::opts::Args, rem: &[String]) -> Result<()> {
+    std::env::set_var(crate::ENV_VAR_WHYNOT_COLORING, args.color.to_string());
     tracing::debug!("checking");
     cargo_check(
         "safe",
@@ -39,34 +42,195 @@ pub(crate) fn run_rustc(rem: &[OsString]) -> Result<()> {
     Ok(())
 }
 
+pub struct SafeOutput<'s> {
+    /// This vec is ordered so that the most serious violations are first.
+    reasons: Vec<(UnsafeOpKind, LocalDefId, Span)>,
+    source_map: &'s rustc_span::source_map::SourceMap,
+}
+
+impl SafeOutput<'_> {
+    //
+    pub fn print(
+        self,
+        mut io: termcolor::StandardStream,
+        tcx: TyCtxt<'_>,
+        checked_fn: LocalDefId,
+    ) -> Result<()> {
+        let mut files = codespan_reporting::files::SimpleFiles::new();
+        let mut hash_map = std::collections::HashMap::new();
+
+        {
+            let idx = self
+                .source_map
+                .lookup_source_file_idx(tcx.def_span(checked_fn).lo());
+            let file = self.source_map.files()[idx].clone();
+            if let Some(src) = file.src.clone() {
+                let f_idx = files.add(file.name.prefer_local().to_string(), (*src).clone());
+                hash_map.entry(idx).or_insert(f_idx);
+            }
+        }
+
+        for (_, _, span) in self.reasons.iter() {
+            let idx = self.source_map.lookup_source_file_idx(span.lo());
+            if hash_map.contains_key(&idx) {
+                continue;
+            }
+            let file = self.source_map.files()[idx].clone();
+            if let Some(src) = file.src.clone() {
+                let f_idx = files.add(file.name.prefer_local().to_string(), (*src).clone());
+                hash_map.entry(idx).or_insert(f_idx);
+            }
+        }
+
+        let mut labels = vec![];
+        let mut first = true;
+        // why is this unique needed?
+        for (did, reasons) in &self
+            .reasons
+            .into_iter()
+            .unique_by(|(_, _, span)| *span)
+            .sorted_by_key(|(_, did, _)| did.local_def_index)
+            .group_by(|(_, did, _)| *did)
+        {
+            let idx = self
+                .source_map
+                .lookup_source_file_idx(tcx.def_span(did).lo());
+            labels.push(span_label(
+                hash_map[&idx],
+                self.source_map,
+                tcx.def_span(did),
+                LabelStyle::Primary,
+                Some("function is unsafe because:".to_string()),
+            ));
+            let mut primary_reason = false;
+            let mut primary_reason_is_extern = true;
+            for (reason, _, span) in reasons {
+                let idx = self.source_map.lookup_source_file_idx(span.lo());
+                let label = match reason {
+                    UnsafeOpKind::CallToUnsafeFunction(Some(did))
+                    | UnsafeOpKind::CallToFunctionWith(did)
+                        if did.as_local().is_some() =>
+                    {
+                        span_label(
+                            hash_map[&idx],
+                            self.source_map,
+                            span,
+                            LabelStyle::Secondary,
+                            Some(reason.description_and_note(tcx).0.to_string()),
+                        )
+                    }
+                    _ => {
+                        primary_reason = true;
+                        if let UnsafeOpKind::CallToUnsafeFunction(Some(_))
+                        | UnsafeOpKind::CallToFunctionWith(_) = reason
+                        {
+                        } else {
+                            primary_reason_is_extern = false;
+                        }
+                        span_label(
+                            hash_map[&idx],
+                            self.source_map,
+                            span,
+                            LabelStyle::Primary,
+                            Some(reason.simple_description().to_string()),
+                        )
+                    }
+                };
+                labels.push(label);
+            }
+
+            let mut diag = if first {
+                first = false;
+                Diagnostic::note()
+                    .with_message("Function is unsafe")
+                    .with_labels(labels.clone())
+            } else {
+                Diagnostic::help().with_labels(labels.clone())
+            };
+
+            if primary_reason {
+                if primary_reason_is_extern {
+                    diag = diag.with_notes(vec![
+                        "this function calls an external unsafe function".to_string()
+                    ]);
+                } else {
+                    diag = diag.with_notes(vec![
+                        "this function does a fundamentally unsafe operation".to_string(),
+                    ]);
+                }
+            }
+            codespan_reporting::term::emit(
+                &mut io,
+                &codespan_reporting::term::Config {
+                    display_style: codespan_reporting::term::DisplayStyle::Rich,
+                    //tab_width: todo!(),
+                    //styles: todo!(),
+                    //chars: todo!(),
+                    //start_context_lines: todo!(),
+                    //end_context_lines: todo!(),
+                    ..<_>::default()
+                },
+                &files,
+                &diag,
+            )?;
+            labels.clear();
+        }
+
+        Ok(())
+    }
+}
+
+pub fn span_label<FileId>(
+    id: FileId,
+    sm: &rustc_span::source_map::SourceMap,
+    span: Span,
+    style: LabelStyle,
+    message: Option<String>,
+) -> Label<FileId> {
+    let start = sm.lookup_byte_offset(span.lo()).pos.0 as usize;
+    let end = sm.lookup_byte_offset(span.hi()).pos.0 as usize;
+    let l = Label::new(style, id, std::ops::Range { start, end });
+    if let Some(msg) = message {
+        l.with_message(msg)
+    } else {
+        l
+    }
+}
 pub struct FakeCallback {
     selector: String,
 }
 
 impl FakeCallback {
-    pub fn run<'tcx>(&self, tcx: ty::TyCtxt<'tcx>) -> Result<()> {
+    pub fn run(&self, tcx: ty::TyCtxt<'_>) -> Result<()> {
         let (fun_id, header) = self.search(tcx)?;
         tracing::debug!(?header);
         if header.unsafety == hir::Unsafety::Normal {
             println!("function is not unsafe");
             return Ok(());
         }
-        let reason = self.find_unsafe_things(tcx, fun_id)?;
-        println!("reason = {:?}", reason);
+        let reasons = self.find_unsafe_things(tcx, fun_id)?;
+
+        let color: crate::opts::Coloring = std::env::var(crate::ENV_VAR_WHYNOT_COLORING)
+            .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)?
+            .parse()
+            .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)?;
+        SafeOutput {
+            reasons,
+            source_map: tcx.sess.source_map(),
+        }
+        .print(termcolor::StandardStream::stdout(color.into()), tcx, fun_id)?;
         Ok(())
     }
 
-    pub fn find_unsafe_things<'tcx>(
+    pub fn find_unsafe_things(
         &self,
-        tcx: ty::TyCtxt<'tcx>,
+        tcx: ty::TyCtxt<'_>,
         fun_id: LocalDefId,
-    ) -> Result<Vec<(UnsafeOpKind, Span)>> {
+    ) -> Result<Vec<(UnsafeOpKind, LocalDefId, Span)>> {
         let mut reasons = vec![];
-        let mut possible_reasons = vec![].into();
-        let mut unsafe_fns_in_cur = vec![];
+        let mut possible_reasons: VecDeque<_> = vec![].into();
         let mut did = fun_id;
         let mut loopctr = 10;
-        let mut first_loop = true;
         loop {
             loopctr -= 1;
             if loopctr == 0 {
@@ -74,9 +238,6 @@ impl FakeCallback {
             }
 
             self.find_unsafe_things_(tcx, did, &mut reasons, &mut possible_reasons, &mut 100)?;
-
-            unsafe_fns_in_cur = possible_reasons.clone().into();
-
             if reasons.is_empty() {
                 // take the first possible unsafe fn, if it is local, check why it is unsafe.
                 'possible: while let Some(violation) = possible_reasons.pop_front() {
@@ -84,13 +245,14 @@ impl FakeCallback {
                         "unsafe fn {:?} is a possible reason for unsafety",
                         violation
                     );
+                    reasons.push(violation);
+
                     match violation.0 {
                         UnsafeOpKind::CallToUnsafeFunction(Some(new_did)) => {
                             if let Some(new_did) = new_did.as_local() {
                                 did = new_did;
                             } else {
                                 // A unlocal function is unsafe, so we can stop looking.
-                                reasons.push(violation)
                             }
                             break 'possible;
                         }
@@ -98,10 +260,12 @@ impl FakeCallback {
                     }
                 }
             } else {
-                break;
+                if possible_reasons.is_empty() {
+                    break;
+                }
+                reasons.extend(possible_reasons.iter().cloned());
             }
         }
-        reasons.extend(unsafe_fns_in_cur);
         Ok(reasons)
     }
 
@@ -109,11 +273,11 @@ impl FakeCallback {
         &self,
         tcx: ty::TyCtxt<'tcx>,
         def_id: LocalDefId,
-        reasons: &mut Vec<(UnsafeOpKind, Span)>,
-        possible_reasons: &mut VecDeque<(UnsafeOpKind, Span)>,
+        reasons: &mut Vec<(UnsafeOpKind, LocalDefId, Span)>,
+        possible_reasons: &mut VecDeque<(UnsafeOpKind, LocalDefId, Span)>,
         depth: &mut i32,
     ) -> Result<(), color_eyre::Report> {
-        tracing::debug!(
+        tracing::trace!(
             "finding out why {} is unsafe",
             tcx.def_path_str(def_id.to_def_id())
         );
@@ -126,24 +290,24 @@ impl FakeCallback {
         for violation in &res {
             match violation.0 {
                 UnsafeOpKind::CallToUnsafeFunction(_) => {
-                    possible_reasons.push_back(violation.clone());
+                    possible_reasons.push_back(*violation);
                     unsafe_found = true;
                 }
                 _ => {
-                    reasons.push(violation.clone());
+                    reasons.push(*violation);
                     unsafe_found = true;
                 }
             }
         }
 
         if !unsafe_found {
-            reasons.push((UnsafeOpKind::ChoosenUnsafe, tcx.def_span(def_id)))
+            reasons.push((UnsafeOpKind::ChoosenUnsafe, def_id, tcx.def_span(def_id)))
         }
         Ok(())
     }
 
     /// Search for the selectors defid
-    pub fn search<'tcx>(&self, tcx: ty::TyCtxt<'tcx>) -> Result<(LocalDefId, FnHeader)> {
+    pub fn search(&self, tcx: ty::TyCtxt<'_>) -> Result<(LocalDefId, FnHeader)> {
         struct Searcher<'a, 't> {
             selector: &'a str,
             result: Option<(LocalDefId, FnHeader)>,

@@ -8,6 +8,7 @@ use rustc_span::def_id::{DefId, LocalDefId};
 use rustc_span::symbol::Symbol;
 use rustc_span::Span;
 
+use std::borrow::Cow;
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
 
@@ -29,13 +30,17 @@ struct UnsafetyVisitor<'a, 'tcx> {
     in_union_destructure: bool,
     param_env: ParamEnv<'tcx>,
     inside_adt: bool,
-    violations: Arc<Mutex<Vec<(UnsafeOpKind, Span)>>>,
+    violations: Arc<Mutex<Vec<(UnsafeOpKind, LocalDefId, Span)>>>,
+    current_did: LocalDefId,
 }
 
 impl<'tcx> UnsafetyVisitor<'_, 'tcx> {
     fn requires_unsafe(&mut self, span: Span, kind: UnsafeOpKind) {
-        tracing::info!(?kind);
-        self.violations.lock().unwrap().push((kind, span))
+        tracing::trace!(?kind, ?span);
+        self.violations
+            .lock()
+            .unwrap()
+            .push((kind, self.current_did, span))
     }
 }
 
@@ -89,7 +94,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> for LayoutConstrainedPlaceVisitor<'a, 'tcx> {
 
 impl<'a, 'tcx> Visitor<'a, 'tcx> for UnsafetyVisitor<'a, 'tcx> {
     fn thir(&self) -> &'a Thir<'tcx> {
-        &self.thir
+        self.thir
     }
 
     fn visit_block(&mut self, block: &Block) {
@@ -442,10 +447,102 @@ pub enum UnsafeOpKind {
 
 use UnsafeOpKind::*;
 
-pub fn check_unsafety<'tcx>(
-    tcx: TyCtxt<'tcx>,
+impl UnsafeOpKind {
+    pub fn simple_description(&self) -> &'static str {
+        match self {
+            CallToUnsafeFunction(..) => "call to unsafe function",
+            UseOfInlineAssembly => "use of inline assembly",
+            InitializingTypeWith => "initializing type with `rustc_layout_scalar_valid_range` attr",
+            UseOfMutableStatic => "use of mutable static",
+            UseOfExternStatic => "use of extern static",
+            DerefOfRawPointer => "dereference of raw pointer",
+            AssignToDroppingUnionField => "assignment to union field that might need dropping",
+            AccessToUnionField => "access to union field",
+            MutationOfLayoutConstrainedField => "mutation of layout constrained field",
+            BorrowOfLayoutConstrainedField => {
+                "borrow of layout constrained field with interior mutability"
+            }
+            CallToFunctionWith(..) => "call to function with `#[target_feature]`",
+            ChoosenUnsafe => "unsafe by choice",
+        }
+    }
+
+    pub fn description_and_note(&self, tcx: TyCtxt<'_>) -> (Cow<'static, str>, &'static str) {
+        match self {
+            CallToUnsafeFunction(did) => (
+                if let Some(did) = did {
+                    Cow::from(format!(
+                        "call to unsafe function `{}`",
+                        tcx.def_path_str(*did)
+                    ))
+                } else {
+                    Cow::Borrowed(self.simple_description())
+                },
+                "consult the function's documentation for information on how to avoid undefined \
+                 behavior",
+            ),
+            UseOfInlineAssembly => (
+                Cow::Borrowed(self.simple_description()),
+                "inline assembly is entirely unchecked and can cause undefined behavior",
+            ),
+            InitializingTypeWith => (
+                Cow::Borrowed(self.simple_description()),
+                "initializing a layout restricted type's field with a value outside the valid \
+                 range is undefined behavior",
+            ),
+            UseOfMutableStatic => (
+                Cow::Borrowed(self.simple_description()),
+                "mutable statics can be mutated by multiple threads: aliasing violations or data \
+                 races will cause undefined behavior",
+            ),
+            UseOfExternStatic => (
+                Cow::Borrowed(self.simple_description()),
+                "extern statics are not controlled by the Rust type system: invalid data, \
+                 aliasing violations or data races will cause undefined behavior",
+            ),
+            DerefOfRawPointer => (
+                Cow::Borrowed(self.simple_description()),
+                "raw pointers may be null, dangling or unaligned; they can violate aliasing rules \
+                 and cause data races: all of these are undefined behavior",
+            ),
+            AssignToDroppingUnionField => (
+                Cow::Borrowed(self.simple_description()),
+                "the previous content of the field will be dropped, which causes undefined \
+                 behavior if the field was not properly initialized",
+            ),
+            AccessToUnionField => (
+                Cow::Borrowed(self.simple_description()),
+                "the field may not be properly initialized: using uninitialized data will cause \
+                 undefined behavior",
+            ),
+            MutationOfLayoutConstrainedField => (
+                Cow::Borrowed(self.simple_description()),
+                "mutating layout constrained fields cannot statically be checked for valid values",
+            ),
+            BorrowOfLayoutConstrainedField => (
+                Cow::Borrowed(self.simple_description()),
+                "references to fields of layout constrained fields lose the constraints. Coupled \
+                 with interior mutability, the field can be changed to invalid values",
+            ),
+            CallToFunctionWith(did) => (
+                Cow::from(format!(
+                    "call to function `{}` with `#[target_feature]`",
+                    tcx.def_path_str(*did)
+                )),
+                "can only be called if the required target features are available",
+            ),
+            ChoosenUnsafe => (
+                Cow::Borrowed(self.simple_description()),
+                "can only be called if the required target features are available",
+            ),
+        }
+    }
+}
+
+pub fn check_unsafety(
+    tcx: TyCtxt<'_>,
     def: ty::WithOptConstParam<LocalDefId>,
-) -> Vec<(UnsafeOpKind, Span)> {
+) -> Vec<(UnsafeOpKind, LocalDefId, Span)> {
     // THIR unsafeck is gated under `-Z thir-unsafeck`
     if !tcx.sess.opts.debugging_opts.thir_unsafeck {
         return vec![];
@@ -497,6 +594,7 @@ pub fn check_unsafety<'tcx>(
         param_env: tcx.param_env(def.did),
         inside_adt: false,
         violations: <_>::default(),
+        current_did: def.did,
     };
     visitor.visit_expr(&thir[expr]);
     Arc::try_unwrap(visitor.violations)

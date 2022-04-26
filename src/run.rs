@@ -16,10 +16,10 @@ pub fn cargo_check<T: AsRef<OsStr>>(
 
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("check");
-    cmd.arg("-q");
+    //cmd.arg("-q");
     cmd.args(args);
     if let Some(package) = package {
-        cmd.args(["-p", &package]);
+        cmd.args(["-p", package]);
     }
 
     cmd.env("RUSTC_WORKSPACE_WRAPPER", std::env::current_exe()?);
@@ -30,13 +30,14 @@ pub fn cargo_check<T: AsRef<OsStr>>(
     if let Some(selector) = command_selector {
         cmd.env(crate::ENV_VAR_WHYNOT_SELECTOR, selector);
     }
-   // cmd.stdout(std::process::Stdio::null());
+    // cmd.stdout(std::process::Stdio::null());
     cmd.status()?;
     tracing::debug!("cargo check called");
     Ok(())
 }
 
 // runs rustc
+#[allow(clippy::type_complexity)]
 pub fn rustc_run<T: AsRef<OsStr>>(
     callbacks: Option<&mut (dyn rustc_driver::Callbacks + Send)>,
     set_codegen: Option<Box<dyn FnOnce(&config::Options) -> Box<dyn CodegenBackend> + Send>>,

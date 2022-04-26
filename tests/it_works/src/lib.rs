@@ -2,6 +2,7 @@ pub use unsafe_mod::unsafety;
 
 pub unsafe fn internal() {
     let a = unsafety();
+
     eprintln!("a: {}", a);
 }
 
@@ -29,8 +30,7 @@ pub mod unsafe_mod {
         let mut a = 1;
         let a = std::ptr::addr_of_mut!(a);
         // this is the unsafe part
-        //let b = *a;
-        let b = 1;
+        let b = *a;
         // this is also unsafe
         let _ = String::from_utf8_unchecked(b"Hello world!".to_vec());
         unsafety_not_really();

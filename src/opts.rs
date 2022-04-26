@@ -38,7 +38,27 @@ pub struct Args {
     #[clap(value_name = "ITEM", parse(try_from_str = crate::parse_selector))]
     pub item: Selector,
     #[clap(long, short = 'p')]
-    pub package: Option<String>
+    pub package: Option<String>,
+    #[clap(default_value = "always")]
+    pub color: Coloring,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum OutputMode {
+    Normal,
+    Json,
+}
+
+impl FromStr for OutputMode {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "normal" => Ok(OutputMode::Normal),
+            "json" => Ok(OutputMode::Json),
+            _ => Err(eyre::eyre!("invalid output mode: {}", s.to_string())),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,17 +69,27 @@ pub enum Coloring {
 }
 
 impl FromStr for Coloring {
-    type Err = String;
+    type Err = eyre::Report;
 
     fn from_str(name: &str) -> Result<Self, Self::Err> {
         match name {
             "auto" => Ok(Coloring::Auto),
             "always" => Ok(Coloring::Always),
             "never" => Ok(Coloring::Never),
-            other => Err(format!(
+            other => Err(eyre::eyre!(
                 "must be auto, always, or never, but found `{}`",
                 other,
             )),
+        }
+    }
+}
+
+impl From<Coloring> for termcolor::ColorChoice {
+    fn from(color: Coloring) -> Self {
+        match color {
+            Coloring::Auto => termcolor::ColorChoice::Auto,
+            Coloring::Always => termcolor::ColorChoice::Always,
+            Coloring::Never => termcolor::ColorChoice::Never,
         }
     }
 }

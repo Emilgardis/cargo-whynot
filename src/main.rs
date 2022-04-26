@@ -16,6 +16,7 @@ extern crate rustc_span;
 extern crate rustc_mir_transform;
 
 pub static ENV_VAR_WHYNOT_MODE: &str     = "__CARGO-WHYNOT_MODE";
+pub static ENV_VAR_WHYNOT_COLORING: &str     = "__CARGO-WHYNOT_COLORING";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
 pub static WHYNOT_RUSTC_WRAPPER_ERROR: &str = "ran `cargo whynot rustc` outside of wrapper";
 
