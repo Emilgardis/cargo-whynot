@@ -16,6 +16,7 @@ pub fn cargo_check<T: AsRef<OsStr>>(
 
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("check");
+    cmd.arg("-q");
     cmd.args(args);
     if let Some(package) = package {
         cmd.args(["-p", &package]);
@@ -29,7 +30,7 @@ pub fn cargo_check<T: AsRef<OsStr>>(
     if let Some(selector) = command_selector {
         cmd.env(crate::ENV_VAR_WHYNOT_SELECTOR, selector);
     }
-    cmd.stdout(std::process::Stdio::null());
+   // cmd.stdout(std::process::Stdio::null());
     cmd.status()?;
     tracing::debug!("cargo check called");
     Ok(())

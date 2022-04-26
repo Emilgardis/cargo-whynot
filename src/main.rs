@@ -1,5 +1,5 @@
 #![feature(rustc_private)]
-#![feature(let_else, box_patterns)]
+#![feature(let_else, let_chains, box_patterns)]
 
 extern crate rustc_codegen_ssa;
 extern crate rustc_const_eval;
@@ -13,6 +13,7 @@ extern crate rustc_metadata;
 extern crate rustc_middle;
 extern crate rustc_session;
 extern crate rustc_span;
+extern crate rustc_mir_transform;
 
 pub static ENV_VAR_WHYNOT_MODE: &str     = "__CARGO-WHYNOT_MODE";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
@@ -27,17 +28,6 @@ use std::str::FromStr;
 use syn_select::Selector;
 
 use self::opts::{Opts, SubCommand};
-
-fn test() {
-use std::process::Command;
-let echo = Command::new(format!(r#"echo {}"#, "items")).spawn().unwrap().stdout.unwrap();
-let res = Command::new("rustfmt").args(["--edition", "2018"]).stdin(echo).output().unwrap();
-let data = if res.status.success() {
-    res.stdout
-} else {
-    panic!("rustfmt failed");
-};
-}
 
 fn main() -> eyre::Result<()> {
     utils::install_utils()?;

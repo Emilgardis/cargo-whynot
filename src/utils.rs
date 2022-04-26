@@ -20,7 +20,7 @@ fn install_tracing() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    let fmt_layer = fmt::layer().with_writer(std::io::stderr).with_target(true);
+    let fmt_layer = fmt::layer().with_writer(std::io::stderr).with_file(true).with_line_number(true).with_target(false);
     #[rustfmt::skip]
     let filter_layer = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))

@@ -10,13 +10,18 @@ pub fn external() {
     eprintln!("a: {}", a);
 }
 
+pub fn safe() {
+    println!("eyy")
+}
+
 pub struct Hello {}
 impl Hello {
     pub fn world(&self) {
         unsafe { self.unsf() }
     }
 
-    unsafe fn unsf(&self) {}
+    pub unsafe fn unsf(&self) {}
+    pub unsafe fn unsaf(&self) {}
 }
 
 pub mod unsafe_mod {
@@ -24,7 +29,12 @@ pub mod unsafe_mod {
         let mut a = 1;
         let a = std::ptr::addr_of_mut!(a);
         // this is the unsafe part
-        let b = *a;
+        //let b = *a;
+        let b = 1;
+        // this is also unsafe
+        let _ = String::from_utf8_unchecked(b"Hello world!".to_vec());
+        unsafety_not_really();
         b
     }
+    pub unsafe fn unsafety_not_really() {}
 }
