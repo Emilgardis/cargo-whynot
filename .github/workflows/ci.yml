@@ -1,0 +1,89 @@
+name: CI
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
+jobs:
+  ci:
+    name: CI
+    needs: [test, fmt, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Done
+        run: exit 0
+
+  test:
+    name: Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        rust: ["nightly"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt
+          override: true
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: rust-${{ matrix.rust}}-tests
+          sharedKey: rust-${{ matrix.rust}}
+          cache-on-failure: true
+      - name: Test 
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-targets --all
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt
+      - name: Run fmt -- --check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.59
+          override: true
+          components: clippy
+      - uses: Swatinem/rust-cache@v1
+        with:
+          sharedKey: rust-${{ env.MSRV }}
+      - name: Run clippy --no-default-features -- -D warnings
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --no-default-features -- -D warnings
+      - name: Run clippy --all-targets --all-features -- -D warnings
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-targets --all-features -- -D warnings

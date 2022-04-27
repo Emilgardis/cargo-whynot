@@ -2,21 +2,17 @@
 #![feature(let_else, let_chains, box_patterns)]
 
 extern crate rustc_codegen_ssa;
-extern crate rustc_const_eval;
-extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_errors;
-extern crate rustc_hash;
 extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_metadata;
 extern crate rustc_middle;
 extern crate rustc_session;
 extern crate rustc_span;
-extern crate rustc_mir_transform;
 
-pub static ENV_VAR_WHYNOT_MODE: &str     = "__CARGO-WHYNOT_MODE";
-pub static ENV_VAR_WHYNOT_COLORING: &str     = "__CARGO-WHYNOT_COLORING";
+pub static ENV_VAR_WHYNOT_MODE: &str = "__CARGO-WHYNOT_MODE";
+pub static ENV_VAR_WHYNOT_COLORING: &str = "__CARGO-WHYNOT_COLORING";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
 pub static WHYNOT_RUSTC_WRAPPER_ERROR: &str = "ran `cargo whynot rustc` outside of wrapper";
 

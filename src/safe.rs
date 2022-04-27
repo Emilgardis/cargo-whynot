@@ -151,7 +151,7 @@ impl SafeOutput<'_> {
             if primary_reason {
                 if primary_reason_is_extern {
                     diag = diag.with_notes(vec![
-                        "this function calls an external unsafe function".to_string()
+                        "this function calls an external unsafe function".to_string(),
                     ]);
                 } else {
                     diag = diag.with_notes(vec![

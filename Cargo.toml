@@ -2,8 +2,16 @@
 name = "cargo-whynot"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Emilgardis/cargo-whynot"
+description = "Cargo subcommand to discover why a function is unsafe"
+include = [
+    "src/**/*",
+    "./Cargo.toml",
+    "./LICENSE*",
+    "./README.md",
+]
+categories = ["cargo-subcommand", "cli", "nightly", "unsafe"]
 
 [dependencies]
 clap = { version = "3.1.12", default-features = false, features = [
