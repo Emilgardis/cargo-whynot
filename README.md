@@ -1,40 +1,38 @@
 # Why Not?
 
+[![github]](https://github.com/emilgardis/cargo-whynot)&ensp;[![crates-io]](https://crates.io/crates/cargo-whynot)
+
+[github]: https://img.shields.io/badge/github-emilgardis/cargo--whynot-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+[crates-io]: https://img.shields.io/crates/v/cargo-whynot.svg?style=for-the-badge&color=fc8d62&logo=rust
+
 Cargo subcommand to discover why a function is unsafe.
 
 Requires a recent enough nightly rust toolchain.
 
-`cargo whynot safe foo`
+```text
+# MAke sure you have the necessary components installed
+rustup component add rustc-dev llvm-tools-preview --toolchain nightly
+
+cargo +nightly install cargo-whynot
+
+cargo whynot safe foo
+```
 
 ## What is unsafety?
 
 [Nomicon definition](https://doc.rust-lang.org/nomicon/what-unsafe-does.html)
 
-  Dereference raw pointers
-  Call unsafe functions (including C functions, compiler intrinsics, and the raw allocator)
-  Implement unsafe traits
-  Mutate statics
-  Access fields of unions
+* Dereference raw pointers
+* Call unsafe functions (including C functions, compiler intrinsics, and the raw allocator)
+* Implement unsafe traits
+* Mutate statics
+* Access fields of unions
 
 ## Why this tool?
 
 Because it's a fun experiment, hooking into rustc to query the drivers.
 You should not use this tool because unsafe code is generally bad (it's not),
 but you can use it to figure out if there is an opportunity to make a function "safe".
-
-## How to install
-
-1. Ensure the `rustc-dev` and possibly `llvm-tools-preview` component is installed for your nightly toolchain
-
-   ```text
-   rustup component add rustc-dev llvm-tools-preview --toolchain nightly
-   ```
-
-2. `cargo +nightly install cargo-whynot`
-
-## How does it work?
-
-  1. Call `cargo check` with `env:RUSTC_WORKSPACE_WRAPPER` set to this binary.
 
 ## Examples
 
