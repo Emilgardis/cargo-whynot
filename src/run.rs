@@ -32,7 +32,6 @@ pub fn cargo_check<T: AsRef<OsStr>>(
     }
     // cmd.stdout(std::process::Stdio::null());
     cmd.status()?;
-    tracing::debug!("cargo check called");
     Ok(())
 }
 
