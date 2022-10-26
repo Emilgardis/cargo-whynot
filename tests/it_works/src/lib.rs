@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc)]
 pub use unsafe_mod::unsafety;
 
 pub unsafe fn internal() {

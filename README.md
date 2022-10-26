@@ -36,30 +36,6 @@ but you can use it to figure out if there is an opportunity to make a function "
 
   1. Call `cargo check` with `env:RUSTC_WORKSPACE_WRAPPER` set to this binary.
 
-## It doesn't work!
-
-### Can't find rustc_driver
-
-If you get a non-zero exit code, and no output, make sure that your rust sysroot is visible.
-
-On Linux:
-
-```
-export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
-```
-
-On Windows:
-
-```
-$env:LD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$($env:LD_LIBRARY_PATH)"
-```
-
-On MacOS:
-
-```
-export DYLD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH
-```
-
 ## Examples
 
 With the following code
@@ -87,7 +63,7 @@ pub mod unsafe_mod {
 
 will report
 
-```
+```text
 note: Function is unsafe
   ┌─ src/lib.rs:3:1
   │

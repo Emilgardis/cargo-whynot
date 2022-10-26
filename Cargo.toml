@@ -5,12 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Emilgardis/cargo-whynot"
 description = "Cargo subcommand to discover why a function is unsafe"
-include = [
-    "src/**/*",
-    "./Cargo.toml",
-    "./LICENSE*",
-    "./README.md",
-]
+include = ["src/**/*", "./Cargo.toml", "./LICENSE*", "./README.md"]
 categories = ["cargo-subcommand", "cli", "nightly", "unsafe"]
 
 [[bin]]
@@ -18,9 +13,10 @@ name = "whynot"
 path = "src/whynot.rs"
 
 [dependencies]
-clap = { version = "3.2.23", default-features = false, features = [
+clap = { version = "4.0.18", default-features = false, features = [
     "derive",
     "std",
+    "error-context"
 ] }
 color-eyre = "0.6.2"
 eyre = "0.6.8"
@@ -38,6 +34,5 @@ itertools = "0.10.5"
 rustc_private = true
 
 [workspace]
-members = [".", "tests/*"]
-
+members = ["xtask", "tests/*"]
 default-members = ["."]

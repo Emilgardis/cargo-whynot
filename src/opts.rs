@@ -1,5 +1,5 @@
 use clap::error::{ContextKind, ContextValue};
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use std::ffi::OsString;
 use std::fmt::{self, Display};
 use std::str::FromStr;
@@ -9,12 +9,7 @@ use syn_select::Selector;
 #[clap(version)]
 pub enum Opts {
     /// Query information from rust
-    #[clap(
-        name = "whynot",
-        version,
-        setting = AppSettings::DeriveDisplayOrder,
-        subcommand,
-    )]
+    #[clap(name = "whynot", version, subcommand)]
     WhyNot(SubCommand),
     #[clap(external_subcommand, hide = true)]
     Rustc(Vec<OsString>),
@@ -23,19 +18,14 @@ pub enum Opts {
 #[derive(Parser, Debug)]
 pub enum SubCommand {
     /// Find the reason for why a function is not safe.
-    #[clap(
-        name = "safe",
-        version,
-        setting = AppSettings::DeriveDisplayOrder,
-        dont_collapse_args_in_usage = true
-    )]
+    #[clap(name = "safe", version, dont_collapse_args_in_usage = true)]
     Safe(Args),
 }
 
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Local path to workspace function to check.
-    #[clap(value_name = "ITEM", parse(try_from_str = crate::parse_selector))]
+    #[clap(value_name = "ITEM", value_parser = crate::parse_selector)]
     pub item: Selector,
     #[clap(long, short = 'p')]
     pub package: Option<String>,
@@ -106,6 +96,7 @@ impl Display for Coloring {
 }
 
 #[test]
+#[cfg(test)]
 fn test_cli() {
     <Opts as clap::CommandFactory>::command().debug_assert();
 }
@@ -137,7 +128,7 @@ pub fn parse_known_args() -> Result<(Opts, Vec<String>), eyre::Report> {
                 break Ok((opts, rem));
             }
             Err(error) => match error.kind() {
-                clap::ErrorKind::UnknownArgument => {
+                clap::error::ErrorKind::UnknownArgument => {
                     let items = error.context().find_map(extract);
                     match items {
                         Some(ContextValue::String(s)) => {

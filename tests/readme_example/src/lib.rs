@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc, clippy::let_and_return)]
 pub use unsafe_mod::unsafety;
 
 pub unsafe fn foo() {

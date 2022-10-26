@@ -5,9 +5,9 @@ use std::{collections::VecDeque, ffi::OsString};
 
 use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
 use eyre::{Context, Result};
-use rustc_hir as hir;
 use hir::{def_id::LocalDefId, intravisit::Visitor, FnHeader};
 use itertools::Itertools;
+use rustc_hir as hir;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Span;
 
@@ -238,7 +238,7 @@ impl FakeCallback {
             }
 
             self.find_unsafe_things_(tcx, did, &mut reasons, &mut possible_reasons, &mut 100)?;
-            tracing::info!(reasons = ?reasons, possible_reasons = ?possible_reasons, "found unsafe things");
+            tracing::debug!(reasons = ?reasons, possible_reasons = ?possible_reasons, "found unsafe things");
             if reasons.is_empty() {
                 // take the first possible unsafe fn, if it is local, check why it is unsafe.
                 'possible: while let Some(violation) = possible_reasons.pop_front() {

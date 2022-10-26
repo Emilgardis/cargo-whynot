@@ -1,4 +1,4 @@
-use eyre::{Context, Result};
+use eyre::Result;
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_session::config;
 use std::{ffi::OsStr, path::PathBuf};
