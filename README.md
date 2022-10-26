@@ -24,10 +24,10 @@ but you can use it to figure out if there is an opportunity to make a function "
 
 ## How to install
 
-1. Ensure the `rustc-dev` component is installed for your nightly toolchain
+1. Ensure the `rustc-dev` and possibly `llvm-tools-preview` component is installed for your nightly toolchain
 
    ```text
-   rustup component add rustc-dev --toolchain nightly
+   rustup component add rustc-dev llvm-tools-preview --toolchain nightly
    ```
 
 2. `cargo +nightly install cargo-whynot`

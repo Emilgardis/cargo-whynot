@@ -157,7 +157,7 @@ impl<'tcx> UnsafetyVisitor<'_, 'tcx> {
                 if let Some((span, kind)) = enclosing_unsafe {
                     lint.span_label(
                         span,
-                        format!("because it's nested under this `unsafe` {}", kind),
+                        format!("because it's nested under this `unsafe` {kind}"),
                     );
                 }
                 lint
