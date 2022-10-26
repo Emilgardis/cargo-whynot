@@ -5,7 +5,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 use syn_select::Selector;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[clap(version)]
 pub enum Opts {
     /// Query information from rust
@@ -20,7 +20,7 @@ pub enum Opts {
     Rustc(Vec<OsString>),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 pub enum SubCommand {
     /// Find the reason for why a function is not safe.
     #[clap(
@@ -122,7 +122,7 @@ pub fn parse_known_args() -> Result<(Opts, Vec<String>), eyre::Report> {
     let mut rem: Vec<String> = vec![];
     let mut args: Vec<String> = std::env::args().collect();
     let mut loop_ctr = 100;
-    println!("{args:?}");
+    tracing::debug!("{args:?}");
     loop {
         loop_ctr -= 1;
         if loop_ctr == 0 {

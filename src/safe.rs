@@ -5,9 +5,9 @@ use std::{collections::VecDeque, ffi::OsString};
 
 use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
 use eyre::{Context, Result};
-use hir::{def_id::LocalDefId, itemlikevisit::ItemLikeVisitor, FnHeader};
-use itertools::Itertools;
 use rustc_hir as hir;
+use hir::{def_id::LocalDefId, intravisit::Visitor, FnHeader};
+use itertools::Itertools;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Span;
 
@@ -34,8 +34,8 @@ pub(crate) fn run_rustc(rem: &[OsString]) -> Result<()> {
         .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)?;
 
     let _ = crate::parse_selector(&selector)?;
-    tracing::debug!("in whynot safe rustc with selector: {selector:?}");
-    tracing::debug!("in whynot safe rustc with rem: `{rem:?}`");
+    tracing::trace!("in whynot safe rustc with selector: {selector:?}");
+    tracing::trace!("in whynot safe rustc with rem: `{rem:?}`");
 
     crate::run::rustc_run(Some(&mut FakeCallback { selector }), None, &rem[1..])?;
 
@@ -203,7 +203,7 @@ pub struct FakeCallback {
 impl FakeCallback {
     pub fn run(&self, tcx: ty::TyCtxt<'_>) -> Result<()> {
         let (fun_id, header) = self.search(tcx)?;
-        tracing::debug!(?header);
+        tracing::trace!(?header);
         if header.unsafety == hir::Unsafety::Normal {
             println!("function is not unsafe");
             return Ok(());
@@ -238,13 +238,14 @@ impl FakeCallback {
             }
 
             self.find_unsafe_things_(tcx, did, &mut reasons, &mut possible_reasons, &mut 100)?;
+            tracing::info!(reasons = ?reasons, possible_reasons = ?possible_reasons, "found unsafe things");
             if reasons.is_empty() {
                 // take the first possible unsafe fn, if it is local, check why it is unsafe.
                 'possible: while let Some(violation) = possible_reasons.pop_front() {
-                    tracing::debug!(
-                        "unsafe fn {:?} is a possible reason for unsafety",
-                        violation
-                    );
+                    // tracing::debug!(
+                    //     "unsafe fn {:?} is a possible reason for unsafety",
+                    //     violation
+                    // );
                     reasons.push(violation);
 
                     match violation.0 {
@@ -286,6 +287,7 @@ impl FakeCallback {
             panic!()
         }
         let res = unsafety_visitor::check_unsafety(tcx, ty::WithOptConstParam::unknown(def_id));
+        tracing::debug!("res: {res:?}");
         let mut unsafe_found = false;
         for violation in &res {
             match violation.0 {
@@ -317,22 +319,22 @@ impl FakeCallback {
         impl Searcher<'_, '_> {
             fn check_match(&mut self, def_id: LocalDefId) -> bool {
                 let path_str = self.tcx.def_path_str(def_id.to_def_id());
-                tracing::debug!(?path_str);
+                tracing::trace!(?path_str);
 
                 path_str.ends_with(&self.selector)
             }
         }
 
-        impl<'hir, 'a, 't> ItemLikeVisitor<'hir> for Searcher<'a, 't> {
+        impl<'hir, 'a, 't> Visitor<'hir> for Searcher<'a, 't> {
             fn visit_item(&mut self, item: &'hir hir::Item<'hir>) {
-                if let hir::Item{ kind: hir::ItemKind::Fn( fn_sig, _, _), ..} = item && self.check_match(item.def_id) && self.result.is_none() {
-                    self.result = Some((item.def_id, fn_sig.header));
+                if let hir::Item{ kind: hir::ItemKind::Fn( fn_sig, _, _), ..} = item && self.check_match(item.def_id.def_id) && self.result.is_none() {
+                    self.result = Some((item.def_id.def_id, fn_sig.header));
                 }
             }
 
             fn visit_impl_item(&mut self, item_impl: &'hir hir::ImplItem<'hir>) {
-                if let hir::ImplItem{kind: hir::ImplItemKind::Fn(fn_sig, _), ..} = item_impl && self.check_match(item_impl.def_id) && self.result.is_none() {
-                    self.result = Some((item_impl.def_id, fn_sig.header));
+                if let hir::ImplItem{kind: hir::ImplItemKind::Fn(fn_sig, _), ..} = item_impl && self.check_match(item_impl.def_id.def_id) && self.result.is_none() {
+                    self.result = Some((item_impl.def_id.def_id, fn_sig.header));
                 }
             }
 
@@ -346,7 +348,7 @@ impl FakeCallback {
             result: None,
             tcx,
         };
-        hir.visit_all_item_likes(&mut visitor);
+        hir.visit_all_item_likes_in_crate(&mut visitor);
         visitor.result.ok_or(eyre::eyre!("no such function found"))
     }
 }

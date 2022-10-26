@@ -1,4 +1,4 @@
-use eyre::Result;
+use eyre::{Context, Result};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_session::config;
 use std::{ffi::OsStr, path::PathBuf};
@@ -58,12 +58,13 @@ pub fn rustc_run<T: AsRef<OsStr>>(
     let cb = if let Some(callbacks) = callbacks {
         callbacks
     } else {
+        #[allow(clippy::box_default)]
         Box::leak(Box::new(rustc_driver::TimePassesCallbacks::default()))
     };
 
     let mut run = rustc_driver::RunCompiler::new(&rustc_args, cb);
     run.set_make_codegen_backend(set_codegen);
-    run.run().map_err(|_| std::process::exit(1))
+    run.run().map_err(|e| eyre::eyre!("error: {e:?}"))
 }
 
 fn sysroot() -> Result<PathBuf> {

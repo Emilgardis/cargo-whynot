@@ -30,6 +30,7 @@ fn main() -> eyre::Result<()> {
     utils::install_utils()?;
 
     let (command, rem) = opts::parse_known_args()?;
+    tracing::debug!("command: {command:?}");
     match command {
         Opts::WhyNot(sc) => match sc {
             SubCommand::Safe(args) => safe::run(args, &rem)?,
