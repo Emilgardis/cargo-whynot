@@ -1,5 +1,4 @@
-Why Not?
--------------------------------------
+# Why Not?
 
 Cargo subcommand to discover why a function is unsafe.
 
@@ -9,13 +8,13 @@ Requires a recent enough nightly rust toolchain.
 
 ## What is unsafety?
 
-https://doc.rust-lang.org/nomicon/what-unsafe-does.html
+[Nomicon definition](https://doc.rust-lang.org/nomicon/what-unsafe-does.html)
 
-    Dereference raw pointers
-    Call unsafe functions (including C functions, compiler intrinsics, and the raw allocator)
-    Implement unsafe traits
-    Mutate statics
-    Access fields of unions
+  Dereference raw pointers
+  Call unsafe functions (including C functions, compiler intrinsics, and the raw allocator)
+  Implement unsafe traits
+  Mutate statics
+  Access fields of unions
 
 ## Why this tool?
 
@@ -23,9 +22,19 @@ Because it's a fun experiment, hooking into rustc to query the drivers.
 You should not use this tool because unsafe code is generally bad (it's not),
 but you can use it to figure out if there is an opportunity to make a function "safe".
 
+## How to install
+
+1. Ensure the `rustc-dev` component is installed for your nightly toolchain
+
+   ```text
+   rustup component add rustc-dev --toolchain nightly
+   ```
+
+2. `cargo +nightly install cargo-whynot`
+
 ## How does it work?
 
-    1. Call `cargo check` with `env:RUSTC_WORKSPACE_WRAPPER` set to this binary.
+  1. Call `cargo check` with `env:RUSTC_WORKSPACE_WRAPPER` set to this binary.
 
 ## It doesn't work!
 
@@ -87,7 +96,7 @@ note: Function is unsafe
 4 │     let a = unsafety();
   │             ---------- call to unsafe function `unsafe_mod::unsafety`
 
-help: 
+help:
    ┌─ src/lib.rs:9:5
    │
  9 │     pub unsafe fn unsafety() -> u32 {

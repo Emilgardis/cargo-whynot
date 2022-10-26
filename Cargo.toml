@@ -13,6 +13,10 @@ include = [
 ]
 categories = ["cargo-subcommand", "cli", "nightly", "unsafe"]
 
+[[bin]]
+name = "whynot"
+path = "src/whynot.rs"
+
 [dependencies]
 clap = { version = "3.1.12", default-features = false, features = [
     "derive",
@@ -29,6 +33,7 @@ codespan-reporting = { version = "0.11.1" }
 codespan = { version = "0.11.1", features = ["serialization"] }
 termcolor = "1.1.3"
 itertools = "0.10.3"
+
 [package.metadata.rust-analyzer]
 rustc_private = true
 
