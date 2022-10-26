@@ -22,19 +22,21 @@ mod safe;
 mod utils;
 use std::str::FromStr;
 
+use clap::Parser;
 use syn_select::Selector;
 
 use self::opts::{Opts, SubCommand};
 
 fn main() -> eyre::Result<()> {
-    utils::install_utils()?;
-
-    let (command, rem) = opts::parse_known_args()?;
+    let command = Opts::parse();
     tracing::debug!("command: {command:?}");
     match command {
-        Opts::WhyNot(sc) => match sc {
-            SubCommand::Safe(args) => safe::run(args, &rem)?,
-        },
+        Opts::WhyNot(sc) => {
+            utils::install_utils()?;
+            match sc {
+                SubCommand::Safe(args) => safe::run(args, &[])?,
+            }
+        }
         Opts::Rustc(external) => match std::env::var(ENV_VAR_WHYNOT_MODE).as_deref() {
             Ok("safe") => safe::run_rustc(&external)?,
             _ => eyre::bail!(WHYNOT_RUSTC_WRAPPER_ERROR),

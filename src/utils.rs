@@ -5,7 +5,10 @@ pub fn install_utils() -> eyre::Result<()> {
 }
 
 fn install_eyre() -> eyre::Result<()> {
-    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
+    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
+        .display_location_section(false)
+        .display_env_section(false)
+        .into_hooks();
 
     eyre_hook.install()?;
 

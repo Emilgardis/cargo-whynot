@@ -16,7 +16,9 @@ path = "src/whynot.rs"
 clap = { version = "4.0.18", default-features = false, features = [
     "derive",
     "std",
-    "error-context"
+    "help",
+    "usage",
+    "suggestions"
 ] }
 color-eyre = "0.6.2"
 eyre = "0.6.8"
@@ -30,9 +32,12 @@ codespan = { version = "0.11.1", features = ["serialization"] }
 termcolor = "1.1.3"
 itertools = "0.10.5"
 
+[dev-dependencies]
+trycmd = "0.14.1"
+
 [package.metadata.rust-analyzer]
 rustc_private = true
 
 [workspace]
-members = ["xtask", "tests/*"]
+members = ["xtask", "tests/it_works", "tests/readme_example"]
 default-members = ["."]

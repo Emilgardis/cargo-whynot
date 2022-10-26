@@ -349,7 +349,9 @@ impl FakeCallback {
             tcx,
         };
         hir.visit_all_item_likes_in_crate(&mut visitor);
-        visitor.result.ok_or(eyre::eyre!("no such function found"))
+        visitor
+            .result
+            .ok_or_else(|| eyre::eyre!("no such function found: {}", visitor.selector))
     }
 }
 
@@ -366,6 +368,13 @@ pub fn check_unsafety<'tcx>(
     let selector = std::env::var(crate::ENV_VAR_WHYNOT_SELECTOR)
         .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)
         .unwrap();
-    FakeCallback { selector }.run(tcx).unwrap();
-    std::process::exit(0);
+
+    FakeCallback { selector }
+        .run(tcx)
+        .map_err(|e| {
+            let _hook = std::panic::take_hook();
+            tcx.sess.fatal(e.to_string());
+        })
+        .unwrap();
+    std::process::exit(1);
 }

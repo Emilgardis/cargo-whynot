@@ -1,4 +1,3 @@
-use clap::error::{ContextKind, ContextValue};
 use clap::Parser;
 use std::ffi::OsString;
 use std::fmt::{self, Display};
@@ -18,7 +17,7 @@ pub enum Opts {
 #[derive(Parser, Debug)]
 pub enum SubCommand {
     /// Find the reason for why a function is not safe.
-    #[clap(name = "safe", version, dont_collapse_args_in_usage = true)]
+    #[clap(name = "safe", version)]
     Safe(Args),
 }
 
@@ -99,51 +98,4 @@ impl Display for Coloring {
 #[cfg(test)]
 fn test_cli() {
     <Opts as clap::CommandFactory>::command().debug_assert();
-}
-
-fn extract(item: (ContextKind, &ContextValue)) -> Option<&ContextValue> {
-    let (k, v) = item;
-    if k == ContextKind::InvalidArg {
-        return Some(v);
-    }
-    None
-}
-
-pub fn parse_known_args() -> Result<(Opts, Vec<String>), eyre::Report> {
-    let mut rem: Vec<String> = vec![];
-    let mut args: Vec<String> = std::env::args().collect();
-    let mut loop_ctr = 100;
-    tracing::debug!("{args:?}");
-    loop {
-        loop_ctr -= 1;
-        if loop_ctr == 0 {
-            Opts::parse();
-            break Err(eyre::eyre!(
-                "loop overflowed, but parsing was successful, wierd"
-            ));
-        }
-        tracing::debug!("in loop");
-        match Opts::try_parse_from(&args) {
-            Ok(opts) => {
-                break Ok((opts, rem));
-            }
-            Err(error) => match error.kind() {
-                clap::error::ErrorKind::UnknownArgument => {
-                    let items = error.context().find_map(extract);
-                    match items {
-                        Some(ContextValue::String(s)) => {
-                            rem.push(s.to_owned());
-                            args.retain(|a| a != s);
-                        }
-                        _ => {
-                            break Err(error.into());
-                        }
-                    }
-                }
-                _ => {
-                    Opts::parse();
-                }
-            },
-        }
-    }
 }
