@@ -39,14 +39,6 @@ fn main() -> color_eyre::Result<()> {
                 let dry_run = sh.var("CI").is_err() || current_branch != default_branch;
                 eprintln!("Taging!{}!", if dry_run { " (dry run)" } else { "" });
 
-                let change_log =
-                    std::fs::read_to_string(get_cargo_workspace().join("CHANGELOG.md"))?;
-
-                color_eyre::eyre::ensure!(
-                    change_log.contains(&format!("## [{tag}] -")),
-                    "change log is not updated"
-                );
-
                 if dry_run {
                     eprintln!("{}", cmd!(sh, "git tag {tag}"));
                 } else {
