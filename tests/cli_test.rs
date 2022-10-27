@@ -1,4 +1,5 @@
 #[test]
+#[ignore]
 fn cli_tests() {
     trycmd::TestCases::new()
         .register_bin(
