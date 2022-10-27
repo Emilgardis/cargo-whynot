@@ -19,6 +19,7 @@ pub(crate) fn run(args: crate::opts::Args, rem: &[String]) -> Result<()> {
     cargo_check(
         "safe",
         Some(args.item.to_string()),
+        args.lib,
         &args.package,
         Some("-Zthir-unsafeck"),
         rem,
@@ -175,7 +176,9 @@ impl SafeOutput<'_> {
             )?;
             labels.clear();
         }
-
+        if !first {
+            rustc_errors::FatalError.raise();
+        }
         Ok(())
     }
 }
@@ -319,7 +322,7 @@ impl FakeCallback {
         impl Searcher<'_, '_> {
             fn check_match(&mut self, def_id: LocalDefId) -> bool {
                 let path_str = self.tcx.def_path_str(def_id.to_def_id());
-                tracing::trace!(?path_str);
+                tracing::debug!(?path_str);
 
                 path_str.ends_with(&self.selector)
             }
@@ -333,6 +336,7 @@ impl FakeCallback {
             }
 
             fn visit_impl_item(&mut self, item_impl: &'hir hir::ImplItem<'hir>) {
+                tracing::debug!(?item_impl);
                 if let hir::ImplItem{kind: hir::ImplItemKind::Fn(fn_sig, _), ..} = item_impl && self.check_match(item_impl.def_id.def_id) && self.result.is_none() {
                     self.result = Some((item_impl.def_id.def_id, fn_sig.header));
                 }
@@ -368,13 +372,16 @@ pub fn check_unsafety<'tcx>(
     let selector = std::env::var(crate::ENV_VAR_WHYNOT_SELECTOR)
         .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)
         .unwrap();
-
-    FakeCallback { selector }
-        .run(tcx)
-        .map_err(|e| {
-            let _hook = std::panic::take_hook();
-            tcx.sess.fatal(e.to_string());
-        })
+    let package = std::env::var(crate::ENV_VAR_WHYNOT_PACKAGE)
+        .wrap_err(crate::WHYNOT_RUSTC_WRAPPER_ERROR)
         .unwrap();
-    std::process::exit(1);
+
+    match (FakeCallback { selector }).run(tcx) {
+        Ok(_) => (),
+        Err(e) => {
+            if tcx.crate_name(hir::def_id::LOCAL_CRATE).to_string() == package {
+                tcx.sess.err(e.to_string());
+            }
+        }
+    };
 }
