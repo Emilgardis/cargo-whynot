@@ -16,7 +16,7 @@ fn main() -> Result<(), color_eyre::Report> {
         .status()?;
 
     if !status.success() {
-        if !matches!(status.code(), Some(404)) {
+        if !matches!(status.code(), Some(101)) {
             #[cfg(target_family = "unix")]
             {
                 use std::os::unix::process::ExitStatusExt;
