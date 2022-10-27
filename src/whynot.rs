@@ -14,6 +14,7 @@ extern crate rustc_span;
 pub static ENV_VAR_WHYNOT_MODE: &str = "__CARGO-WHYNOT_MODE";
 pub static ENV_VAR_WHYNOT_COLORING: &str = "__CARGO-WHYNOT_COLORING";
 pub static ENV_VAR_WHYNOT_SELECTOR: &str = "__CARGO-WHYNOT_SELECTOR";
+pub static ENV_VAR_WHYNOT_PACKAGE: &str = "__CARGO-WHYNOT_SELECTOR";
 pub static WHYNOT_RUSTC_WRAPPER_ERROR: &str = "ran `cargo whynot rustc` outside of wrapper";
 
 mod opts;
@@ -28,15 +29,14 @@ use syn_select::Selector;
 use self::opts::{Opts, SubCommand};
 
 fn main() -> eyre::Result<()> {
+    utils::install_utils()?;
+
     let command = Opts::parse();
     tracing::debug!("command: {command:?}");
     match command {
-        Opts::WhyNot(sc) => {
-            utils::install_utils()?;
-            match sc {
-                SubCommand::Safe(args) => safe::run(args, &[])?,
-            }
-        }
+        Opts::WhyNot(sc) => match sc {
+            SubCommand::Safe(args) => safe::run(args, &[])?,
+        },
         Opts::Rustc(external) => match std::env::var(ENV_VAR_WHYNOT_MODE).as_deref() {
             Ok("safe") => safe::run_rustc(&external)?,
             _ => eyre::bail!(WHYNOT_RUSTC_WRAPPER_ERROR),

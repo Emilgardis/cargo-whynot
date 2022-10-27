@@ -28,6 +28,8 @@ pub struct Args {
     pub item: Selector,
     #[clap(long, short = 'p')]
     pub package: Option<String>,
+    #[clap(long)]
+    pub lib: bool,
     #[clap(default_value = "always")]
     pub color: Coloring,
 }

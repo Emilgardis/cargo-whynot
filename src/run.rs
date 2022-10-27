@@ -7,19 +7,22 @@ use std::{ffi::OsStr, path::PathBuf};
 pub fn cargo_check<T: AsRef<OsStr>>(
     command_mode: &'static str,
     command_selector: Option<String>,
+    lib: bool,
     package: &Option<String>,
     rustflags: Option<&'static str>,
     args: &[T],
 ) -> Result<()> {
     // FIXME: Is this the same cargo?
-    tracing::debug!("cargo check is being called");
-
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("check");
     //cmd.arg("-q");
     cmd.args(args);
     if let Some(package) = package {
         cmd.args(["-p", package]);
+    }
+
+    if lib {
+        cmd.arg("--lib");
     }
 
     cmd.env("RUSTC_WORKSPACE_WRAPPER", std::env::current_exe()?);
@@ -30,7 +33,12 @@ pub fn cargo_check<T: AsRef<OsStr>>(
     if let Some(selector) = command_selector {
         cmd.env(crate::ENV_VAR_WHYNOT_SELECTOR, selector);
     }
+    if let Some(package) = package {
+        cmd.env(crate::ENV_VAR_WHYNOT_PACKAGE, package);
+    }
+
     // cmd.stdout(std::process::Stdio::null());
+    tracing::debug!(?cmd, cmd.envs = ?cmd.get_envs().filter_map(|(k,v)| v.map(|v| (k,v))).map(|(k, v)| format!("{} = {}", k.to_string_lossy(), v.to_string_lossy())).collect::<Vec<_>>().join(", "));
     cmd.status()?;
     Ok(())
 }
