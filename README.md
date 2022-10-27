@@ -10,12 +10,17 @@ Cargo subcommand to discover why a function is unsafe.
 Requires a recent enough nightly rust toolchain.
 
 ```text
-# MAke sure you have the necessary components installed
-rustup component add rustc-dev llvm-tools-preview --toolchain nightly
+# Make sure you have the necessary components installed
 
-cargo +nightly install cargo-whynot
+$ rustup component add rustc-dev llvm-tools-preview --toolchain nightly
 
-cargo whynot safe foo
+# Install `cargo-whynot` with the nightly toolchain
+
+$ cargo +nightly install cargo-whynot
+
+# Invoke the tool!
+
+$ cargo whynot safe foo
 ```
 
 ## What is unsafety?
